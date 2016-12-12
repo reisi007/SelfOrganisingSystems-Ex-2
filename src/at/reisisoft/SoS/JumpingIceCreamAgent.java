@@ -2,8 +2,6 @@ package at.reisisoft.SoS;
 
 import jade.core.behaviours.Behaviour;
 import jade.core.behaviours.SimpleBehaviour;
-import jade.domain.FIPAException;
-import jade.lang.acl.ACLMessage;
 
 /**
  * Created by Florian on 11.12.2016.
@@ -13,11 +11,10 @@ public class JumpingIceCreamAgent extends IceCreamAgent {
     private double lastPos = Double.MIN_VALUE;
 
     public JumpingIceCreamAgent() {
-        super(JumpingIceCreamAgent.class);
     }
 
     public JumpingIceCreamAgent(double x) {
-        super(JumpingIceCreamAgent.class, x);
+        super(x);
     }
 
     @Override
@@ -27,7 +24,7 @@ public class JumpingIceCreamAgent extends IceCreamAgent {
 
             @Override
             public void action() {
-                finished = false;
+             /*   finished = false;
                 ACLMessage message = waitForMessage();
                 if (message != null)
                     try {
@@ -47,7 +44,7 @@ public class JumpingIceCreamAgent extends IceCreamAgent {
                     } catch (FIPAException e) {
                         e.printStackTrace();
                     }
-                finished = true;
+                finished = true;*/
             }
 
             @Override

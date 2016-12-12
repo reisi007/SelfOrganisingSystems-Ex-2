@@ -3,30 +3,20 @@ package at.reisisoft.SoS;
 
 import jade.core.behaviours.Behaviour;
 import jade.core.behaviours.SimpleBehaviour;
-import jade.domain.FIPAException;
-import jade.lang.acl.ACLMessage;
 
 /**
  * Created by Florian on 11.12.2016.
  */
-public class IceCreamAgent extends AbstractAgent {
+public class IceCreamAgent extends AbstractAgent<Double> {
 
     protected double x;
 
-    public IceCreamAgent() {
-        this(IceCreamAgent.class);
-    }
-
-    protected IceCreamAgent(Class<? extends IceCreamAgent> class1) {
+    protected IceCreamAgent() {
         this(1000 * Math.random());
     }
 
-    public IceCreamAgent(double x) {
-        this(IceCreamAgent.class, x);
-    }
 
-    protected IceCreamAgent(Class<? extends IceCreamAgent> class1, double x) {
-        super(class1);
+    protected IceCreamAgent(double x) {
         this.x = x;
     }
 
@@ -42,7 +32,7 @@ public class IceCreamAgent extends AbstractAgent {
 
             @Override
             public void action() {
-                finished = false;
+             /*   finished = false;
                 ACLMessage message = waitForMessage();
                 if (message != null)
                     try {
@@ -64,7 +54,7 @@ public class IceCreamAgent extends AbstractAgent {
                     } catch (FIPAException e) {
                         e.printStackTrace();
                     }
-                finished = true;
+                finished = true;*/
             }
 
             @Override
@@ -72,5 +62,14 @@ public class IceCreamAgent extends AbstractAgent {
                 return finished;
             }
         };
+    }
+
+    public double getPosition() {
+        return x;
+    }
+
+    @Override
+    public Double getData() {
+        return x;
     }
 }
