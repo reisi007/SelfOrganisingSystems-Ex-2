@@ -1,4 +1,6 @@
-package at.reisisoft.SoS;
+package at.reisisoft.SoS.icecream;
+
+import at.reisisoft.SoS.AbstractDirectorAgent;
 
 import java.util.Arrays;
 
@@ -9,8 +11,8 @@ public class IceCreamDirectorAgent extends AbstractDirectorAgent<Double, IceCrea
     public IceCreamDirectorAgent() throws NoSuchMethodException {
         super(
                 Arrays.asList(
-                        IceCreamAgent.class.getConstructor(),
-                        JumpingIceCreamAgent.class.getConstructor()
+                        IceCreamAgent.class,
+                        JumpingIceCreamAgent.class
                 )
         );
     }
