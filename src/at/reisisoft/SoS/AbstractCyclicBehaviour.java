@@ -17,7 +17,10 @@ public abstract class AbstractCyclicBehaviour extends CyclicBehaviour {
     public abstract void action();
 
     protected final static MessageTemplate template =
-            MessageTemplate.MatchPerformative(ACLMessage.REQUEST);
+            MessageTemplate.and(
+                    MessageTemplate.MatchPerformative(ACLMessage.REQUEST),
+                    MessageTemplate.MatchOntology("sos")
+            );
 
     public ACLMessage prepareACLMessage(ACLMessage original) {
         final ACLMessage reply = original.createReply();

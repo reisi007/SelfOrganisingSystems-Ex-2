@@ -6,6 +6,8 @@ import jade.core.ProfileImpl;
 import jade.core.Runtime;
 import jade.wrapper.AgentController;
 
+import java.util.StringJoiner;
+
 /**
  * Created by Florian on 13.12.2016.
  */
@@ -14,12 +16,24 @@ public class Main {
     public static void main(String[] args) throws Exception {
         start(
                 IceCreamDirectorAgent.class,
-                3,
-                3
+                getIceCreamMessage(
+                        500,
+                        //4, 6
+                        10
+                )
         );
     }
 
-    private static void start(Class<? extends AbstractDirectorAgent<?, ?>> class1, int instances, int cycles) throws Exception {
+    private static String getIceCreamMessage(int cycles, int... classInstances) {
+        StringJoiner sj = new StringJoiner(",");
+        sj.add(Integer.toString(cycles));
+        for (int i : classInstances) {
+            sj.add(Integer.toString(i));
+        }
+        return sj.toString();
+    }
+
+    private static void start(Class<? extends AbstractDirectorAgent<?, ?>> class1, String message) throws Exception {
         // Get a hold on JADE runtime
         Runtime rt = Runtime.instance();
 
@@ -46,7 +60,6 @@ public class Main {
         AgentController rma = mainContainer.createNewAgent("rma",
                 "jade.tools.rma.rma", new Object[0]);
         rma.start();
-        String message = instances + "," + cycles;
         AgentController director = mainContainer.createNewAgent("director", class1.getName(), new Object[]{message, mainContainer});
         director.start();
     }

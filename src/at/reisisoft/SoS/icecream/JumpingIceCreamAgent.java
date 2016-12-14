@@ -7,13 +7,12 @@ import jade.lang.acl.UnreadableException;
 
 import java.io.Serializable;
 import java.util.Arrays;
+import java.util.List;
 
 /**
  * Created by Florian on 11.12.2016.
  */
 public class JumpingIceCreamAgent extends IceCreamAgent {
-
-    private double lastPos = Double.MIN_VALUE;
 
     public JumpingIceCreamAgent() {
     }
@@ -33,9 +32,9 @@ public class JumpingIceCreamAgent extends IceCreamAgent {
                 else
                     try {
                         Serializable serializable = message.getContentObject();
-                        double[] world = (double[]) serializable;
+                        List<Double> world = (List<Double>) serializable;
                         synchronized (this) {
-                            x = nextPosition(world);
+                            x = apply(world);
                         }
                         final ACLMessage response = prepareACLMessage(message);
                         response.setSender(getAID());
@@ -50,7 +49,8 @@ public class JumpingIceCreamAgent extends IceCreamAgent {
         };
     }
 
-    private double nextPosition(double[] world) {
+    private double nextPosition(List<Double> worldList) {
+        Double[] world = worldList.toArray(new Double[worldList.size()]);
         final int maxIndex = world.length - 2;
         Arrays.sort(world);
         double maxDiff = Double.MIN_VALUE;
@@ -63,18 +63,29 @@ public class JumpingIceCreamAgent extends IceCreamAgent {
                 maxDiffIndex = i;
             }
         }
+        double nextPos;
         double randCheckWorldBorders = Math.random();
         if (randCheckWorldBorders > 0.75) {
             double lowestWorld = world[0], maximumWorld = 1000 - world[world.length - 1];
             if (Math.max(lowestWorld, maximumWorld) > maxDiff) {
-                double nextPos;
+
                 if (lowestWorld > maximumWorld) {
                     nextPos = world[0] / 2;
                 } else
                     nextPos = world[world.length - 1] + (1000 - world[world.length - 1]) / 2;
-                return nextPos;
-            }
-        }
-        return world[maxDiffIndex] + (world[maxDiffIndex + 1] - world[maxDiffIndex]) / 2;
+
+            } else
+                nextPos = world[maxDiffIndex] + (world[maxDiffIndex + 1] - world[maxDiffIndex]) / 2;
+        } else nextPos = world[maxDiffIndex] + (world[maxDiffIndex + 1] - world[maxDiffIndex]) / 2;
+        double variable = 1 + (Math.random() - 0.5) / 5d;
+        double nextWithRand = nextPos * variable;
+        if (0 <= nextWithRand && nextWithRand <= 1000)
+            return nextWithRand;
+        return nextPos;
+    }
+
+    @Override
+    public Double apply(List<Double> world) {
+        return (x = nextPosition(world));
     }
 }
