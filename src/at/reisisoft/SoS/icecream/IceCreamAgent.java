@@ -35,13 +35,13 @@ public class IceCreamAgent extends AbstractAgent<Double> {
 
     protected Behaviour getBehaviour() {
         return new AbstractCyclicBehaviour(this) {
-            private boolean finished;
 
             @Override
             public void action() {
-                finished = false;
-                ACLMessage message = getMessage(o -> block());
-                if (message != null)
+                ACLMessage message = receive(template);
+                if (message == null)
+                    block();
+                else
                     try {
                         Serializable serializable = message.getContentObject();
                         double[] world = (double[]) serializable;
@@ -65,7 +65,6 @@ public class IceCreamAgent extends AbstractAgent<Double> {
                     } catch (UnreadableException | ClassCastException e) {
                         e.printStackTrace();
                     }
-                finished = true;
             }
         };
     }

@@ -2,15 +2,17 @@ package at.reisisoft.SoS;
 
 import jade.core.AID;
 import jade.core.Agent;
-import jade.core.behaviours.CyclicBehaviour;
+import jade.core.behaviours.SimpleBehaviour;
 import jade.core.behaviours.ThreadedBehaviourFactory;
 import jade.lang.acl.ACLMessage;
 import jade.lang.acl.MessageTemplate;
+import jade.lang.acl.UnreadableException;
 import jade.wrapper.AgentContainer;
 import jade.wrapper.StaleProxyException;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -18,8 +20,14 @@ import java.util.List;
  */
 public abstract class AbstractDirectorAgent<AgentData extends Serializable, T extends AbstractAgent<AgentData>> extends Agent {
 
+    private enum AgentState {
+        INIT,
+        LOOP_EMIT,
+        LOOP_COLLECT,
+        END
+    }
+
     private final List<Class<? extends T>> classes;
-    private boolean lookedForArgs = false;
     private String initMessage;
     private AgentContainer agentController;
     private ThreadedBehaviourFactory tbf = new ThreadedBehaviourFactory();
@@ -30,29 +38,74 @@ public abstract class AbstractDirectorAgent<AgentData extends Serializable, T ex
 
     @Override
     protected void setup() {
-        setEnabledO2ACommunication(true, 1);
         addBehaviour(
                 tbf.wrap(
-                        new CyclicBehaviour(this) {
+                        new SimpleBehaviour() {
+
+                            private AgentState agentState = AgentState.INIT;
+                            private List<T> registeredAgents;
+                            private int agents, curIterationCount = 0, maxIterations = -1;
+                            private List<AgentData> agentData;
+                            //How many collect messages got received
+                            private int collectMessages = 0;
+
                             @Override
                             public void action() {
                                 //Wait for an init message
-                                if (!lookedForArgs && (initMessage = (String) getArguments()[0]) != null) {
+                                if (AgentState.INIT.equals(agentState) && (initMessage = (String) getArguments()[0]) != null) {
                                     agentController = (AgentContainer) getArguments()[1];
-                                    doSomethingWithRawMessage(initMessage);
-                                    lookedForArgs = true;
+                                    init(initMessage);
+                                    if (!AgentState.LOOP_EMIT.equals(agentState))
+                                        throw new IllegalStateException("Should be in LOOP_EMIT state");
+                                    stepEmit();
                                 } else {
                                     final ACLMessage message = waitForInitMessage();
-                                    if (message != null)
-                                        doSomethingWithRawMessage(message.getContent());
-                                    else
-                                        block();
+                                    if (message != null) {
+                                        if (AgentState.INIT.equals(agentState))
+                                            init(message.getContent());
+                                        if (AgentState.LOOP_EMIT.equals(agentState))
+                                            stepEmit();
+                                        else if (AgentState.LOOP_COLLECT.equals(agentState)) {
+                                            try {
+                                                final Serializable contentObject = message.getContentObject();
+                                                @SuppressWarnings("unchecked")
+                                                AgentData agentData = (AgentData) contentObject;
+                                                stepCollect(agentData);
+                                            } catch (UnreadableException e) {
+                                                throw new RuntimeException(e);
+                                            }
+
+                                        }
+                                        if (AgentState.END.equals(agentState))
+                                            end();
+                                    }
+                                    block();
                                 }
                             }
 
-                            private void doSomethingWithRawMessage(String rawContent) {
-                                int agents, maxIterations = -1;
-                                T[] registeredAgents = null;
+                            @Override
+                            public boolean done() {
+                                return AgentState.END.equals(agentState);
+                            }
+
+                            private void end() {
+                                System.out.printf("%n%n%n == End of simulation ==");
+                            }
+
+                            private void stepCollect(AgentData cur) {
+                                if (collectMessages <= 0) {
+                                    collectMessages = 0;
+                                    agentData.clear();
+                                }
+                                agentData.add(cur);
+                                collectMessages++;
+                                if (collectMessages >= registeredAgents.size()) {
+                                    System.out.printf("%n%n%n Positions: %s %n%n%n", agentData.toString());
+                                    agentState = AgentState.LOOP_EMIT;
+                                }
+                            }
+
+                            private void init(String rawContent) {
                                 try {
                                     final String[] splitted = rawContent.split(",");
                                     agents = Integer.parseInt(splitted[0]);
@@ -67,50 +120,47 @@ public abstract class AbstractDirectorAgent<AgentData extends Serializable, T ex
                                     System.exit(141522);
                                 }
                                 int curIterationCount = 0;
-                                Serializable[] agentData, lastAgentData = new Serializable[registeredAgents.length];
+                                agentData = new ArrayList<>(registeredAgents.size());
                                 //Setup world
-                                for (int i = 0; i < lastAgentData.length; i++) {
-                                    lastAgentData[i] = registeredAgents[i].getData();
-                                }
-                                final AID director = getAID();
-                                AID curActor;
-                                ACLMessage message2Actor, messageFromActor;
-                                try {
-                                    do {
-                                        ACLMessage sendWorldToAgent = new ACLMessage(ACLMessage.REQUEST);
-                                        sendWorldToAgent.addReplyTo(director);
-                                        sendWorldToAgent.setSender(director);
-                                        sendWorldToAgent.setLanguage("java");
-                                        agentData = new Serializable[registeredAgents.length];
-                                        for (int agentIndex = 0; agentIndex < registeredAgents.length; agentIndex++) {
-                                            T agent = registeredAgents[agentIndex];
-                                            message2Actor = (ACLMessage) sendWorldToAgent.clone();
-                                            message2Actor.setContentObject(lastAgentData);
-                                            curActor = agent.getAID();
-                                            message2Actor.addReceiver(curActor);
-                                            System.out.printf("%n%n%nSending message to agent %d%n%n%n", agentIndex);
-                                            send(message2Actor);
-                                            message2Actor = null;
-                                            MessageTemplate messageTemplate = MessageTemplate.and(MessageTemplate.MatchPerformative(ACLMessage.CONFIRM), MessageTemplate.MatchSender(curActor));
-                                            do {
-                                                //  messageFromActor = blockingReceive(messageTemplate);
-                                                messageFromActor = receive();
-                                                if (messageFromActor == null)
-                                                    block();
-                                            } while (messageFromActor == null);
-                                            //Ignore message object
-                                            agentData[agentIndex] = agent.getData();
-                                        }
-                                        lastAgentData = agentData;
-                                        //TODO print summary
-                                    } while (++curIterationCount <= maxIterations);
-                                } catch (IOException e) {
-                                    System.err.printf("Error while talking to actors in iteration %d.", curIterationCount);
-                                    e.printStackTrace();
-                                    System.exit(141523);
-                                }
+                                for (T cur : registeredAgents)
+                                    agentData.add(cur.getData());
+                                agentState = AgentState.LOOP_EMIT;
                             }
-                        })
+
+                            private void stepEmit() {
+                                final AID director = getAID();
+                                collectMessages = 0;
+                                if (curIterationCount >= maxIterations) {
+                                    agentState = AgentState.END;
+                                } else
+                                    try {
+                                        final ACLMessage sendWorldToAgents = new ACLMessage(ACLMessage.REQUEST);
+                                        sendWorldToAgents.setDefaultEnvelope();
+                                        sendWorldToAgents.addReplyTo(director);
+                                        sendWorldToAgents.setSender(director);
+                                        sendWorldToAgents.setLanguage("java");
+                                        sendWorldToAgents.setContentObject(agentData.toArray());
+                                        agentData = new ArrayList<>(agentData.size());
+
+                                        for (T agent : registeredAgents)
+                                            sendWorldToAgents.addReceiver(agent.getAID());
+
+                                        System.out.printf("%n%n%nSending message to all agents %n%n%n");
+                                        send(sendWorldToAgents);
+                                       /* agentData = agentData;
+                                        TODO print summary -> different method*/
+                                        //The last thing: Increase iteration count
+                                        curIterationCount++;
+                                        agentState = AgentState.LOOP_COLLECT;
+                                    } catch (IOException e) {
+                                        System.err.printf("Error while talking to actors in iteration %d.", curIterationCount);
+                                        e.printStackTrace();
+                                        System.exit(141523);
+                                    }
+                            }
+
+                        }
+                )
         );
     }
 
@@ -125,11 +175,11 @@ public abstract class AbstractDirectorAgent<AgentData extends Serializable, T ex
 
     }
 
-    private T[] getRandomAgents(int cnt) throws IllegalAccessException, InstantiationException, StaleProxyException {
+    private List<T> getRandomAgents(int cnt) throws IllegalAccessException, InstantiationException, StaleProxyException {
         if (cnt < 3)
             throw new IllegalArgumentException("Number of agents too low. Minimum 2. Is: " + cnt);
         @SuppressWarnings("unchecked")
-        T[] agents = (T[]) new AbstractAgent[cnt];
+        List<T> agents = new ArrayList<T>(cnt);
         int index;
         Class<? extends T> aClass;
         for (int i = 0; i < cnt; i++) {
@@ -138,7 +188,7 @@ public abstract class AbstractDirectorAgent<AgentData extends Serializable, T ex
             aClass = classes.get(index);
             T cur = aClass.newInstance();
             agentController.acceptNewAgent(aClass.getName() + '_' + i, cur);
-            agents[i] = cur;
+            agents.add(cur);
         }
         return agents;
     }

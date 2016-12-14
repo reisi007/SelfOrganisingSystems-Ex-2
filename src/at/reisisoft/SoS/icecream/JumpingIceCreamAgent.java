@@ -27,8 +27,10 @@ public class JumpingIceCreamAgent extends IceCreamAgent {
         return new AbstractCyclicBehaviour(this) {
             @Override
             public void action() {
-                ACLMessage message = getMessage(o -> block());
-                if (message != null)
+                ACLMessage message = receive(template);
+                if (message == null)
+                    block();
+                else
                     try {
                         Serializable serializable = message.getContentObject();
                         double[] world = (double[]) serializable;
