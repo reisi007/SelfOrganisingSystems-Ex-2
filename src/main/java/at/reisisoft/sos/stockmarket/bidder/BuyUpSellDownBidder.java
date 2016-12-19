@@ -10,8 +10,8 @@ import java.util.Map;
  * Created by Florian on 19.12.2016.
  */
 public class BuyUpSellDownBidder extends SellLowestPriceBidder {
-    private static final int GRANULARITY = 3;
-    int cnt = (int) (GRANULARITY * Math.random());
+    private static final int GRANULARITY = 10;
+    private int cnt = (int) (GRANULARITY * Math.random());
 
     @Override
     protected StockMarketRequest doBuyOrSell(Map<BigDecimal, Integer> myStock, List<Map.Entry<Integer, BigDecimal>> stockPrice, BigDecimal currentStockPrice) {
@@ -26,9 +26,8 @@ public class BuyUpSellDownBidder extends SellLowestPriceBidder {
         int canBuy;
         if (isStockRising(stockPrice)) {
             if ((canBuy = canBuy(currentStockPrice)) > 0) {
-                canBuy = (int) (canBuy * Math.random());
-                if (canBuy < 1)
-                    canBuy = 1;
+                canBuy = Math.max(1, (int) (canBuy * Math.random()));
+
                 return new BuyRequest(canBuy);
             } else return NoBid.getInstance();
         } else {
@@ -44,6 +43,8 @@ public class BuyUpSellDownBidder extends SellLowestPriceBidder {
     }
 
     private boolean isStockRising(List<Map.Entry<Integer, BigDecimal>> stockPrice) {
+        if (stockPrice.size() < 2)
+            return false;
         BigDecimal last = stockPrice.get(stockPrice.size() - 2).getValue(),
                 current = stockPrice.get(stockPrice.size() - 1).getValue();
         return last.compareTo(current) < 0;

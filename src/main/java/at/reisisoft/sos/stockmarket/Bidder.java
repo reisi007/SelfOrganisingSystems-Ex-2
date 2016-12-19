@@ -2,28 +2,27 @@ package at.reisisoft.sos.stockmarket;
 
 import akka.actor.ActorRef;
 import at.reisisoft.sos.AbstractUntypedActor;
-import at.reisisoft.sos.directormessage.Acknowledge;
-import at.reisisoft.sos.directormessage.GetID;
 
 import java.math.BigDecimal;
 import java.util.*;
 
 /**
- * Created by Florian on 19.12.2016.
+ * Created by Florian on 19.12.2016. FIXME People have too much money
  */
 public abstract class Bidder extends AbstractUntypedActor {
 
-    private static final BigDecimal MAX_MONEY = new BigDecimal(1000000);
+    private static final BigDecimal MAX_MONEY = new BigDecimal(10000);
     private BigDecimal money;
     private Map<BigDecimal, Integer> bought = new TreeMap<>();
     private int totalStock = 0;
+    private boolean isInitialized = false;
 
     @Override
     public final synchronized void onReceive(Object o) throws Throwable {
         o = Objects.requireNonNull(o);
-        if (o instanceof GetID)
-            initialize(getSender(), (GetID) o);
-        else if (o instanceof StockValueBroadcast)
+        if (!isInitialized)
+            initialize();
+        if (o instanceof StockValueBroadcast)
             doBid(getSender(), (StockValueBroadcast) o);
         else if (o instanceof BuyResponse)
             buyResponse((BuyResponse) o);
@@ -32,12 +31,11 @@ public abstract class Bidder extends AbstractUntypedActor {
         else unhandled(o);
     }
 
-    private void initialize(ActorRef to, GetID getID) {
+    private void initialize() {
         double rand = Math.random();
         rand = rand * rand * rand; // rand^3
         money = MAX_MONEY.multiply(new BigDecimal(rand));
-
-        tell(to, Acknowledge.getInstance());
+        isInitialized = true;
     }
 
     private void doBid(ActorRef to, StockValueBroadcast stockValueBroadcast) {
@@ -51,7 +49,7 @@ public abstract class Bidder extends AbstractUntypedActor {
 
     private void buyResponse(BuyResponse response) {
         BigDecimal value = response.getPricePerPiece().multiply(new BigDecimal(response.getAmount())).negate();
-        money = money.add(value);
+        money = money.subtract(value);
         bought.compute(response.getPricePerPiece(), (k, v) -> (v == null ? 0 : v) + response.getAmount());
         totalStock += response.getAmount();
     }

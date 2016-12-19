@@ -9,4 +9,9 @@ public class SellTransaction extends AbstractTransaction {
     public SellTransaction(BigDecimal value) {
         super(value.negate());
     }
+
+    @Override
+    public BigDecimal getAbsolutValue() {
+        return getValue().negate();
+    }
 }

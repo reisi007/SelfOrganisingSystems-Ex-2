@@ -8,4 +8,8 @@ import java.math.BigDecimal;
 public interface Transacation {
 
     BigDecimal getValue();
+
+    default BigDecimal getAbsolutValue() {
+        return getValue();
+    }
 }

@@ -28,7 +28,7 @@ public class IceCreamDirectorAgent extends AbstractUntypedActor {
     }
 
     private State state = State.PRE_INIT;
-    private List<ActorRef> actors = new ArrayList<>();
+    private final List<ActorRef> actors = new ArrayList<>();
     private int id = 0, ackReceived = 0, curIteration = 0;
     private double[] world;
     private int maxIterations = -1;
