@@ -60,7 +60,8 @@ public class Main {
         AgentController rma = mainContainer.createNewAgent("rma",
                 "jade.tools.rma.rma", new Object[0]);
         rma.start();
-        AgentController director = mainContainer.createNewAgent("director", class1.getName(), new Object[]{message, mainContainer});
+        AgentController director = mainContainer.createNewAgent("director", class1.getName(), new Object[]{});
+        // AgentController director = mainContainer.createNewAgent("director", class1.getName(), new Object[]{message, mainContainer});
         director.start();
     }
 }

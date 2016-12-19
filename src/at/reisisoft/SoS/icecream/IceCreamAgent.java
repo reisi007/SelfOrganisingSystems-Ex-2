@@ -3,18 +3,14 @@ package at.reisisoft.SoS.icecream;
 
 import at.reisisoft.SoS.AbstractAgent;
 import at.reisisoft.SoS.AbstractCyclicBehaviour;
+import at.reisisoft.SoS.Gson;
 import jade.core.behaviours.Behaviour;
 import jade.lang.acl.ACLMessage;
-import jade.lang.acl.UnreadableException;
-
-import java.io.Serializable;
-import java.util.List;
-import java.util.function.Function;
 
 /**
  * Created by Florian on 11.12.2016.
  */
-public class IceCreamAgent extends AbstractAgent<Double> implements Function<List<Double>, Double> {
+public class IceCreamAgent extends AbstractAgent<Double> {
 
     protected double x;
 
@@ -43,8 +39,7 @@ public class IceCreamAgent extends AbstractAgent<Double> implements Function<Lis
                     block();
                 else
                     try {
-                        Serializable serializable = message.getContentObject();
-                        List<Double> world = (List<Double>) serializable;
+                        Double[] world = Gson.getInstance().fromJson(message.getContent(), Double[].class);
                         apply(world); // result can be ignored here
                         final ACLMessage respone = prepareACLMessage(message);
                         respone.setSender(getAID());
@@ -53,19 +48,19 @@ public class IceCreamAgent extends AbstractAgent<Double> implements Function<Lis
                     } catch (NumberFormatException e) {
                         e.printStackTrace(System.err);
                         System.err.printf("%n%n%nMessage didn't contain a valid number%n");
-                    } catch (UnreadableException | ClassCastException e) {
+                    } catch (ClassCastException e) {
                         e.printStackTrace();
                     }
             }
         };
     }
 
-    private int findClosest(List<Double> world) {
+    private int findClosest(Double[] world) {
         double minDistance = Double.MAX_VALUE;
         double distance;
         int bestIndex = -1;
-        for (int i = 0; i < world.size(); i++) {
-            double aWorld = world.get(i);
+        for (int i = 0; i < world.length; i++) {
+            double aWorld = world[i];
             distance = Math.abs(aWorld - x);
             if (distance < minDistance && distance != 0) {
                 minDistance = distance;
@@ -88,10 +83,10 @@ public class IceCreamAgent extends AbstractAgent<Double> implements Function<Lis
     private static final double MIN_JUMP_SIZE = 3;
 
     @Override
-    public Double apply(List<Double> world) {
+    public Double apply(Double[] world) {
         int other = findClosest(world);
         synchronized (this) {
-            double otherPos = world.get(other);
+            double otherPos = world[other];
             double dist = otherPos - x;
             if (Math.abs(dist) >= MAX_JUMP_SIZE) {
                 if (dist > 0)

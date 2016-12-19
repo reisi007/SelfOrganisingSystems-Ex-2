@@ -2,22 +2,22 @@ package at.reisisoft.SoS;
 
 import jade.core.AID;
 import jade.core.Agent;
-import jade.core.behaviours.SimpleBehaviour;
+import jade.core.behaviours.CyclicBehaviour;
 import jade.lang.acl.ACLMessage;
 import jade.lang.acl.MessageTemplate;
-import jade.wrapper.AgentContainer;
 import jade.wrapper.StaleProxyException;
 
 import java.io.*;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.StringJoiner;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * Created by Florian on 12.12.2016.
  */
-public abstract class AbstractDirectorAgent<AgentData extends Serializable, T extends AbstractAgent<AgentData>> extends Agent {
+public abstract class AbstractDirectorAgent<AgentData extends Serializable, T extends AbstractAgent<AgentData>> extends Agent implements Function<String, AgentData> {
 
     private enum AgentState {
         INIT,
@@ -28,7 +28,6 @@ public abstract class AbstractDirectorAgent<AgentData extends Serializable, T ex
 
     private final List<Class<? extends T>> classes;
     private String initMessage;
-    private AgentContainer agentController;
     private final BufferedWriter bufferedWriter;
 
 
@@ -37,22 +36,23 @@ public abstract class AbstractDirectorAgent<AgentData extends Serializable, T ex
         bufferedWriter = new BufferedWriter(new OutputStreamWriter(new FileOutputStream("D:\\Desktop\\sos.csv", false)));
     }
 
+
     @Override
     protected void setup() {
-        addBehaviour(new SimpleBehaviour() {
+        addBehaviour(new CyclicBehaviour(this) {
                          private AgentState agentState = AgentState.INIT;
                          private List<T> registeredAgents;
+                         private List<AID> aidsInAgentOrder;
                          private int curIterationCount = 0, maxIterations = -1;
-                         private List<AgentData> agentData;
+                         private AgentData[] agentData;
                          //How many collect messages got received
                          private int collectMessages = 0;
 
                          @Override
                          public void action() {
                              //Wait for an init message
-                             while (!AgentState.END.equals(agentState)) {
-                                 if (AgentState.INIT.equals(agentState) && (initMessage = (String) getArguments()[0]) != null) {
-                                     agentController = (AgentContainer) getArguments()[1];
+                             if (!AgentState.END.equals(agentState)) {
+                                 if (AgentState.INIT.equals(agentState) && ((getArguments().length >= 1) && (initMessage = (String) getArguments()[0]) != null)) {
                                      init(initMessage);
                                      if (!AgentState.LOOP_EMIT.equals(agentState))
                                          throw new IllegalStateException("Should be in LOOP_EMIT state");
@@ -62,24 +62,32 @@ public abstract class AbstractDirectorAgent<AgentData extends Serializable, T ex
                                          e.printStackTrace();
                                      }
                                  } else {
-                                     if (AgentState.LOOP_EMIT.equals(agentState))
-                                         try {
-                                             stepEmit();
-                                         } catch (IOException e) {
-                                             e.printStackTrace();
+                                     ACLMessage message = receive();
+                                     if (message == null)
+                                         block();
+                                     else {
+                                         if (AgentState.INIT.equals(agentState))
+                                             init(message.getContent());
+                                         if (AgentState.LOOP_EMIT.equals(agentState))
+                                             try {
+                                                 stepEmit();
+                                             } catch (IOException e) {
+                                                 e.printStackTrace();
+                                             }
+                                         else if (AgentState.LOOP_COLLECT.equals(agentState)) {
+                                             stepCollect(apply(message.getContent()), message.getSender());
                                          }
+                                     }
                                  }
                              }
-                             try {
-                                 end();
-                             } catch (IOException e) {
-                                 e.printStackTrace();
-                             }
-                         }
-
-                         @Override
-                         public boolean done() {
-                             return AgentState.END.equals(agentState);
+                             if (AgentState.END.equals(agentState))
+                                 try {
+                                     end();
+                                 } catch (IOException e) {
+                                     e.printStackTrace();
+                                 }
+                             else
+                                 block();
                          }
 
                          private void end() throws IOException {
@@ -88,17 +96,19 @@ public abstract class AbstractDirectorAgent<AgentData extends Serializable, T ex
                              System.out.printf("%n%n%n == End of simulation ==");
                          }
 
-                         private void stepCollect(AgentData cur) {
+                         private void stepCollect(AgentData cur, AID current) {
                              if (collectMessages <= 0) {
                                  collectMessages = 0;
-                                 agentData.clear();
+                                 agentData = (AgentData[]) new Serializable[registeredAgents.size()];
                              }
-                             agentData.add(cur);
+                             agentData[getAidIndex(current)] = cur;
                              collectMessages++;
-                             if (collectMessages >= registeredAgents.size()) {
-                                 System.out.printf("%n%n%n Positions: %s %n%n%n", agentData.toString());
-                                 agentState = AgentState.LOOP_EMIT;
-                             }
+                             if (collectMessages >= registeredAgents.size())
+                                 agentState = AgentState.LOOP_COLLECT;
+                         }
+
+                         private int getAidIndex(AID current) {
+                             return aidsInAgentOrder.indexOf(current);
                          }
 
                          private void init(String rawContent) {
@@ -106,6 +116,7 @@ public abstract class AbstractDirectorAgent<AgentData extends Serializable, T ex
                                  final String[] splitted = rawContent.split(",");
                                  maxIterations = Integer.parseInt(splitted[0]);
                                  registeredAgents = getRandomAgents(splitted);
+                                 aidsInAgentOrder = registeredAgents.stream().sequential().map(Agent::getAID).collect(Collectors.toList());
                                  StringJoiner sj = new StringJoiner(";");
                                  sj.add("Iteration");
                                  for (int i = 1; i <= registeredAgents.size(); i++)
@@ -121,12 +132,14 @@ public abstract class AbstractDirectorAgent<AgentData extends Serializable, T ex
                                  System.exit(141522);
                              }
                              int curIterationCount = 0;
-                             agentData = new ArrayList<>(registeredAgents.size());
+
+                             agentData = (AgentData[]) new Serializable[registeredAgents.size()];
                              //Setup world
-                             for (T cur : registeredAgents)
-                                 agentData.add(cur.getData());
+                             for (int i = 0; i < registeredAgents.size(); i++) {
+                                 T cur = registeredAgents.get(i);
+                                 agentData[i] = cur.getData();
+                             }
                              agentState = AgentState.LOOP_EMIT;
-                             agentData = Collections.unmodifiableList(agentData);
                          }
 
                          private void stepEmit() throws IOException {
@@ -135,20 +148,25 @@ public abstract class AbstractDirectorAgent<AgentData extends Serializable, T ex
                              if (curIterationCount >= maxIterations) {
                                  agentState = AgentState.END;
                              } else {
-                                 List<AgentData> newAgentData = new ArrayList<>(agentData.size());
                                  printWorld(agentData);
-                                 for (T agent : registeredAgents)
-                                     newAgentData.add(agent.apply(agentData));
-
+                                 String content = at.reisisoft.SoS.Gson.getInstance().toJson(agentData);
+                                 ACLMessage message = new ACLMessage(ACLMessage.REQUEST);
+                                 message.addReplyTo(director);
+                                 //  message.setOntology(BasicOntology.getInstance().getName());
+                                 message.setContent(content);
+                                 message.setSender(director);
+                                 for (T agent : registeredAgents) {
+                                     message.addReceiver(agent.getAID());
+                                 }
+                                 send(message);
                                  //The last thing: Increase iteration count
                                  curIterationCount++;
-                                 agentData = Collections.unmodifiableList(newAgentData);
-                                 agentState = AgentState.LOOP_EMIT;
+                                 agentState = AgentState.LOOP_COLLECT;
 
                              }
                          }
 
-                         private void printWorld(List<AgentData> world) throws IOException {
+                         private void printWorld(AgentData[] world) throws IOException {
                              StringJoiner stringJoiner = new StringJoiner(";");
                              stringJoiner.add(Integer.toString(curIterationCount));
                              for (AgentData ad : world)
@@ -184,7 +202,7 @@ public abstract class AbstractDirectorAgent<AgentData extends Serializable, T ex
             aClass = classes.get(i - 1);
             for (int j = 0; j < numberOfInstances; j++) {
                 T cur = aClass.newInstance();
-                agentController.acceptNewAgent(aClass.getName() + '_' + i + '-' + j, cur);
+                getContainerController().acceptNewAgent(aClass.getName() + '_' + i + '-' + j, cur);
                 agents.add(cur);
             }
         }

@@ -17,4 +17,9 @@ public class IceCreamDirectorAgent extends AbstractDirectorAgent<Double, IceCrea
                 )
         );
     }
+
+    @Override
+    public Double apply(String s) {
+        return Double.parseDouble(s);
+    }
 }

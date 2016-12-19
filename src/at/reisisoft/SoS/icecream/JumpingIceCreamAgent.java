@@ -1,13 +1,11 @@
 package at.reisisoft.SoS.icecream;
 
 import at.reisisoft.SoS.AbstractCyclicBehaviour;
+import at.reisisoft.SoS.Gson;
 import jade.core.behaviours.Behaviour;
 import jade.lang.acl.ACLMessage;
-import jade.lang.acl.UnreadableException;
 
-import java.io.Serializable;
 import java.util.Arrays;
-import java.util.List;
 
 /**
  * Created by Florian on 11.12.2016.
@@ -31,8 +29,7 @@ public class JumpingIceCreamAgent extends IceCreamAgent {
                     block();
                 else
                     try {
-                        Serializable serializable = message.getContentObject();
-                        List<Double> world = (List<Double>) serializable;
+                        Double[] world = Gson.getInstance().fromJson(message.getContent(), Double[].class);
                         synchronized (this) {
                             x = apply(world);
                         }
@@ -42,15 +39,12 @@ public class JumpingIceCreamAgent extends IceCreamAgent {
                     } catch (NumberFormatException e) {
                         e.printStackTrace(System.err);
                         System.err.printf("%n%n%nMessage didn't contain a valid number%n");
-                    } catch (UnreadableException e) {
-                        e.printStackTrace();
                     }
             }
         };
     }
 
-    private double nextPosition(List<Double> worldList) {
-        Double[] world = worldList.toArray(new Double[worldList.size()]);
+    private double nextPosition(Double[] world) {
         final int maxIndex = world.length - 2;
         Arrays.sort(world);
         double maxDiff = Double.MIN_VALUE;
@@ -85,7 +79,7 @@ public class JumpingIceCreamAgent extends IceCreamAgent {
     }
 
     @Override
-    public Double apply(List<Double> world) {
-        return (x = nextPosition(world));
+    public Double apply(Double[] world) {
+        return nextPosition(world);
     }
 }
