@@ -73,7 +73,7 @@ public class StockMarketDirectorAgent extends AbstractUntypedActor {
         }
         maxIterations = initMessage.getMaxIterations();
         //init Stock DB
-        stockPrice = new BigDecimal(10 + 100 * Math.random());
+        stockPrice = new BigDecimal(10 + 100 * Math.random()).setScale(10, BigDecimal.ROUND_FLOOR);
         initialAmountAvailable = amountAvailable = 20000 + (int) (50000 * Math.random());
         doTick();
         state = State.ANNOUNCE_STOCK_PRICE;
@@ -142,39 +142,40 @@ public class StockMarketDirectorAgent extends AbstractUntypedActor {
         getContext().system().terminate();
     }
 
-    private final static double DELTA = 0.00005;
+    private final static BigDecimal MINIMAL_STOCK_PRICE = BigDecimal.ONE.divide(BigDecimal.valueOf(100), 2, BigDecimal.ROUND_HALF_UP);
+
 
     private void calculateNextStockPrice() {
-        BigDecimal nextStockPrice;
-        if (amountAvailable <= 0) {
-            nextStockPrice = stockPrice.divide(BigDecimal.valueOf(2));
-            amountAvailable = initialAmountAvailable;
-            initialAmountAvailable *= 2;
-        } else {
-            final BigDecimal netTransactionValue = transactions.stream().map(Transacation::getValue).reduce(BigDecimal.ZERO, BigDecimal::add);
-            final BigDecimal absolutTransactionValue = transactions.stream().map(Transacation::getAbsolutValue).reduce(BigDecimal.ZERO, BigDecimal::add);
-            double sigma = netTransactionValue.doubleValue() / absolutTransactionValue.doubleValue();
-            if (Double.isNaN(sigma))
-                sigma = 0;
-            else {
-                sigma /= 100;
-                if (Math.abs(sigma) < DELTA) {
-                    if (sigma > 0)
-                        sigma = DELTA;
-                    else
-                        sigma = -DELTA;
-                }
-            }
-            double popularity;
-            if (amountAvailable == 0)
-                popularity = 10;
-            else
-                popularity = 1 + absolutTransactionValue.doubleValue() / (stockPrice.doubleValue() * amountAvailable);
 
-            if (popularity <= 1)
-                popularity = 0.9995;
-            nextStockPrice = stockPrice.multiply(new BigDecimal(popularity)).multiply(new BigDecimal(1 + sigma));
-        }
-        stockPrice = nextStockPrice;
+        final double buyTransactionValue = transactions.stream().filter(e -> e instanceof BuyTransaction).map(Transacation::getValue).mapToDouble(BigDecimal::doubleValue).sum();
+        final double sellTransactionValue = transactions.stream().filter(e -> e instanceof SellTransaction).map(Transacation::getValue).mapToDouble(BigDecimal::doubleValue).sum();
+
+
+        double stockSold = buyTransactionValue / stockPrice.doubleValue();
+        double buyPopulrity = Math.log(1 + 20 * stockSold / amountAvailable);
+        if (Double.isInfinite(buyPopulrity))
+            buyPopulrity = Double.MAX_VALUE;
+        buyPopulrity = Math.min(2, buyPopulrity);
+        double sellPopularity = (sellTransactionValue / (10 * (buyTransactionValue - sellTransactionValue)));
+        if (Double.isNaN(sellPopularity))
+            sellPopularity = 0;
+        if (Double.isNaN(buyPopulrity))
+            buyPopulrity = 0;
+        double initPopularity = (buyTransactionValue == 0 && sellTransactionValue == 0) ? 0.855 /*Most significant parameter*/ : 1.2;
+        double popularity = initPopularity + buyPopulrity + sellPopularity;
+
+        double oracle = 1 + oracle();
+        double change = oracle * popularity;
+        // System.out.printf("buyPopularity: %s, sellPopularity: %s, popularity: %s, oracle: %s, change: %s%n", buyPopulrity, sellPopularity, popularity, oracle, change);
+        stockPrice = stockPrice.multiply(
+                new BigDecimal(change).setScale(10, BigDecimal.ROUND_HALF_UP)
+        ).setScale(10, BigDecimal.ROUND_FLOOR);
+        if (stockPrice.compareTo(MINIMAL_STOCK_PRICE) <= 0)
+            stockPrice = MINIMAL_STOCK_PRICE;
+    }
+
+    private double oracle() {
+        double rand = Math.random() - 0.5;
+        return (rand * rand * rand);
     }
 }

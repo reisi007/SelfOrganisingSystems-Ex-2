@@ -7,7 +7,7 @@ import at.reisisoft.sos.stockmarket.StockMarketRequest;
 
 import java.math.BigDecimal;
 import java.util.*;
-import java.util.function.*;
+import java.util.function.Predicate;
 import java.util.stream.Collector;
 
 /**
@@ -24,35 +24,14 @@ public class BuyDownSellUpBidder extends Bidder {
     @Override
     protected Map<BigDecimal, Integer> sellResponse(Map<BigDecimal, Integer> bought, int amount) {
         try {
-            final SortedSet<Map.Entry<BigDecimal, Integer>> collectedSet = bought.entrySet().stream().filter(isWin()).collect(new Collector<Map.Entry<BigDecimal, Integer>, TreeSet<Map.Entry<BigDecimal, Integer>>, SortedSet<Map.Entry<BigDecimal, Integer>>>() {
-                @Override
-                public Supplier<TreeSet<Map.Entry<BigDecimal, Integer>>> supplier() {
-                    return () -> new TreeSet<>(Comparator.comparing(Map.Entry::getKey));
-                }
-
-                @Override
-                public BiConsumer<TreeSet<Map.Entry<BigDecimal, Integer>>, Map.Entry<BigDecimal, Integer>> accumulator() {
-                    return TreeSet::add;
-                }
-
-                @Override
-                public BinaryOperator<TreeSet<Map.Entry<BigDecimal, Integer>>> combiner() {
-                    return (a, b) -> {
+            final SortedSet<Map.Entry<BigDecimal, Integer>> collectedSet = bought.entrySet().stream().filter(isWin()).collect(Collector.of(
+                    () -> new TreeSet<>(Comparator.comparing(Map.Entry::getKey)),
+                    TreeSet::add,
+                    (a, b) -> {
                         a.addAll(b);
                         return a;
-                    };
-                }
-
-                @Override
-                public Function<TreeSet<Map.Entry<BigDecimal, Integer>>, SortedSet<Map.Entry<BigDecimal, Integer>>> finisher() {
-                    return e -> e;
-                }
-
-                @Override
-                public Set<Characteristics> characteristics() {
-                    return Collections.unmodifiableSet(new HashSet<>(Arrays.asList(Characteristics.CONCURRENT, Characteristics.IDENTITY_FINISH)));
-                }
-            });
+                    }
+            ));
 
             int totalValue = 0;
             final Iterator<Map.Entry<BigDecimal, Integer>> iterator = collectedSet.iterator();

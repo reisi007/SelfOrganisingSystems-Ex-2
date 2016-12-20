@@ -31,12 +31,12 @@ public class BuyUpSellDownBidder extends SellLowestPriceBidder {
                 return new BuyRequest(canBuy);
             } else return NoBid.getInstance();
         } else {
-            int canSell = getTotalStock();
+            long canSell = getTotalStock();
             if (canSell > 0) {
                 canSell = (int) (canSell * Math.random());
                 if (canSell < 1)
                     canSell = 1;
-                return new SellRequest(canSell);
+                return new SellRequest((int)Math.min(Integer.MAX_VALUE,canSell));
             }
         }
         return NoBid.getInstance();

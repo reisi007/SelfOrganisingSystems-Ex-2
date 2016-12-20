@@ -1,0 +1,11 @@
+ public static void main(String[] args) {
+        DirectorInit initMessage = new DirectorInit(
+                new File("D:\\Desktop\\sos.csv"),
+                5000
+        );
+
+        initMessage.addData(BuyDownSellUpBidder.class, 10);
+        initMessage.addData(BuyUpSellDownBidder.class, 10);
+
+        MyAkkaMain.startActorSystem(StockMarketDirectorAgent.class, initMessage);
+    }

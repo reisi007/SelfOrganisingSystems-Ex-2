@@ -7,14 +7,14 @@ import java.math.BigDecimal;
 import java.util.*;
 
 /**
- * Created by Florian on 19.12.2016. FIXME People have too much money
+ * Created by Florian on 19.12.2016.
  */
 public abstract class Bidder extends AbstractUntypedActor {
 
-    private static final BigDecimal MAX_MONEY = new BigDecimal(10000);
+    private static final BigDecimal MAX_MONEY = new BigDecimal(10000).setScale(2, BigDecimal.ROUND_HALF_UP);
     private BigDecimal money;
     private Map<BigDecimal, Integer> bought = new TreeMap<>();
-    private int totalStock = 0;
+    private long totalStock = 0;
     private boolean isInitialized = false;
 
     @Override
@@ -34,7 +34,7 @@ public abstract class Bidder extends AbstractUntypedActor {
     private void initialize() {
         double rand = Math.random();
         rand = rand * rand * rand; // rand^3
-        money = MAX_MONEY.multiply(new BigDecimal(rand));
+        money = MAX_MONEY.multiply(new BigDecimal(0.2 + rand)).setScale(2, BigDecimal.ROUND_FLOOR);
         isInitialized = true;
     }
 
@@ -48,15 +48,15 @@ public abstract class Bidder extends AbstractUntypedActor {
     }
 
     private void buyResponse(BuyResponse response) {
-        BigDecimal value = response.getPricePerPiece().multiply(new BigDecimal(response.getAmount())).negate();
-        money = money.subtract(value);
+        BigDecimal value = response.getPricePerPiece().multiply(new BigDecimal(response.getAmount()));
+        money = money.subtract(value).setScale(2, BigDecimal.ROUND_FLOOR);
         bought.compute(response.getPricePerPiece(), (k, v) -> (v == null ? 0 : v) + response.getAmount());
         totalStock += response.getAmount();
     }
 
     private void sellResponseInternal(SellResponse response) {
         BigDecimal value = response.getPricePerPiece().multiply(new BigDecimal(response.getAmount()));
-        money = money.add(value);
+        money = money.add(value).setScale(2, BigDecimal.ROUND_FLOOR);
         final Map<BigDecimal, Integer> bigDecimalIntegerMap = sellResponse(Collections.unmodifiableMap(bought), response.getAmount());
         //Check amount
         totalStock -= response.getAmount();
@@ -86,7 +86,7 @@ public abstract class Bidder extends AbstractUntypedActor {
         return money.divide(stockPrice, BigDecimal.ROUND_FLOOR).intValue();
     }
 
-    protected final int getTotalStock() {
+    protected final long getTotalStock() {
         return totalStock;
     }
 }
